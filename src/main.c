@@ -101,6 +101,19 @@ int main(int const argc, char** const argv)
     // It has to be in the [-1, WIDTH] range.
     if (count > WIDTH || count < -1)
         exit(EXIT_FAILURE);
+    
+    // Shortcut if count == WIDTH
+    if (count == WIDTH) {
+        for (int x = 0; x < WIDTH * 3; x++) {
+            for (int y = 0; y < HEIGHT; y++) {
+                data[x + y * WIDTH * 3] = 0;
+            }
+        }
+        // Finally write the output image, free the data and return.
+        writeDataToOut(data);
+        free(data);
+        exit(EXIT_SUCCESS);
+    }
 
     // Iterate it count - times over, every time computing the minPath and then removing it from the data.
     // Free the rows for each iteration, to avoid heap buffer overflow.
