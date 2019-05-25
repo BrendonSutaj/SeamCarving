@@ -1,3 +1,463 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <getopt.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
+#include <limits.h>
+
+// Function declarations.
+int* checkFormat(FILE* file, char* filename);
+int colorDifference(int r_1, int g_1, int b_1, int r_2, int g_2, int b_2);
+void computeStats(int* data);
+int* computeMinPath(int* data);
+void removePixels(int* rowValues, int* data);
+void writeDataToOut(int* data);
+int mini(int x, int y);
+
+int WIDTH = 0;
+int HEIGHT = 0;
+
 int main(int const argc, char** const argv)
 {
+    // Argument flags, indicating whether they were used or not. (Initial value is 0, which stands for "false")
+    int c = 0;
+    int s_flag = 0;
+    int p_flag = 0;
+    int n_flag = 0;
+    int count = 0;
+
+    // Using POSIX optarg, setting flags if the respective option is given in argv.
+    // '?' means that some error occurred -> exit_fail.
+    while ((c = getopt(argc, argv, "spn:")) != -1)
+    {
+        switch (c)
+        {
+            case 's':
+                s_flag = 1;
+                break;
+            case 'p':
+                p_flag = 1;
+                break;
+            case 'n':
+                count = atoi(optarg);
+                n_flag = 1;
+                break;
+            case '?':
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    // The filename has to be at the optind position, since optarg reordered the arguments in argv.
+    char* filename = optind < argc ? argv[optind] : NULL;
+    FILE* file;
+
+    // If the filename is non existent, exit_fail.
+    if (filename == NULL)
+        exit(EXIT_FAILURE);
+
+
+    // Check if the file exists, if it does not -> exit_fail, open otherwise.
+    if (access(filename, F_OK) != -1) {
+        file = fopen(filename, "rb");
+    } else {
+        exit(EXIT_FAILURE);
+    }
+
+    // File could not be opened.
+    if (!file)
+        exit(EXIT_FAILURE);
+
+
+    // Check the format for errors and get the values of the pixels into data.
+    int* data = checkFormat(file, filename);
+
+    // The s_flag is prioritized. Compute the stats, free the data and return.
+    if (s_flag) {
+        computeStats(data);
+        free(data);
+        exit(EXIT_SUCCESS);
+    }
+
+    // Next one in the priority list is the p_flag. Compute the minPath and print it to the console. Free data and rows and return.
+    if (p_flag) {
+        int* rows = computeMinPath(data);
+
+        for (int i = 0; i < HEIGHT; i++) {
+            printf("%d\n", rows[i]);
+        }
+        free(data);
+        free(rows);
+        exit(EXIT_SUCCESS);
+    }
+
+    // If we reach this code part, check if the n_flag is set.
+    // If it is not set or count == - 1 we set it to WIDTH.
+    count = (!n_flag || count == -1) ? WIDTH
+            : count;
+
+    // It has to be in the [-1, WIDTH] range.
+    if (count > WIDTH || count < -1)
+        exit(EXIT_FAILURE);
+
+    // Iterate it count - times over, every time computing the minPath and then removing it from the data.
+    // Free the rows for each iteration, to avoid heap buffer overflow.
+    while (count > 0) {
+        int* rows = computeMinPath(data);
+        removePixels(rows, data);
+        free(rows);
+        count--;
+    }
+
+    // Finally write the output image, free the data and return.
+    writeDataToOut(data);
+    free(data);
+    exit(EXIT_SUCCESS);
+}
+
+/**
+ * Numbers above 255 should be more than 1 byte, thus the count check should suffice to check for numbers higher than 255.
+ * Numbers lower than 0, should have a minus sign '-', which is not allowed and also checked.
+ *
+ * This function should check for errors in the file given, if there are no errors the values are returned.
+ * @param file
+ * @param filename
+ * @return the data.
+ */
+int* checkFormat(FILE* file, char* filename) {
+
+    // Check for the correct file ending first.
+    const char *fileEnding = strrchr(filename, '.');
+    if (!fileEnding || fileEnding == filename || strcmp("ppm", fileEnding + 1))
+        exit(EXIT_FAILURE);
+    
+
+    // Go through the file to determine the fileSize in bytes.
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+
+    // Reset to the start position of the file.
+    fseek(file, 0, SEEK_SET);
+
+    // Get all the chars as a string, stored into fileContent.
+    // Allocating 1 more byte, for appropriately terminating the string with a 0 byte.
+    unsigned char *fileContent = malloc(fileSize + 1);
+    fread(fileContent, 1, fileSize, file);
+    fileContent[fileSize] = 0;
+
+    // Close the file finally.
+    fclose(file);
+
+    // In the first row, the ppm format needs to have a "P3\n".
+    if (fileContent[0] != 'P' || fileContent[1] != '3' || fileContent[2] != '\n')
+        exit(EXIT_FAILURE);
+
+
+    int width = 0;
+    int height = 0;
+
+
+    // The next one has to be the width. Store the width.
+    if (!isdigit(fileContent[3]))
+        exit(EXIT_FAILURE);
+    
+    int i = 3;
+    while (fileContent[i] >= 48 && fileContent[i] <= 57) {
+        width = width * 10 + fileContent[i++] - 48;
+    }
+    
+    
+    // At least one whitespace after width is needed.
+    if (fileContent[i] != 32)
+        exit(EXIT_FAILURE);
+
+    // Now skip all additional whitespaces.
+    while (i <= fileSize && fileContent[i] == 32) {
+        i++;
+    }
+
+    // The next byte after the whitespaces needs to be the height. Store the height.
+    if (fileContent[i] < 48 || fileContent[i] > 57)
+        exit(EXIT_FAILURE);
+
+    while (fileContent[i] >= 48 && fileContent[i] <= 57) {
+        height = height * 10 + fileContent[i++] - 48;
+    }
+    
+    // Skip Whitespaces.
+    while(fileContent[i] == 32) {
+        i++;
+    }
+
+    // Width and height needs to be > 0 and a newline has to be following.
+    if (width <= 0 || height <= 0 || fileContent[i] != 10)
+        exit(EXIT_FAILURE);
+    
+    
+    // The next two bytes need to be 255 and \n.
+    if (fileContent[++i] != 2 + 48 || fileContent[++i] != 5 + 48 || fileContent[++i] != 5 + 48 || fileContent[++i] != 10)
+        exit(EXIT_FAILURE);
+    
+
+    // Skip whitespaces, decrease count for every digit found. There have to be width * height * (red, green, blue) value many entries.
+    int count = width * height * 3;
+    for (int j = i + 1; j <= fileSize; j++) {
+        
+        if (fileContent[j] == 0)
+            break;
+            
+        if (fileContent[j] == 10 || fileContent[j] == 32)
+            continue;
+
+        if (fileContent[j] < 48 || fileContent[j] > 57)
+            exit(EXIT_FAILURE);
+        
+        int result = 0;
+        while (fileContent[j] >= 48 && fileContent[j] <= 57) {
+            result = result * 10 + fileContent[j++] - 48;
+        }
+        
+        
+        if (result > 255)
+            exit(EXIT_FAILURE);
+
+        count--;
+        j--;
+    }
+
+    // If count is != 0 by now, too many or too less entries are given.
+    if (count)
+        exit(EXIT_FAILURE);
+
+    // Since everything is ok, save the values into the array data.
+    int *data = malloc(width * height * 3 * sizeof(int));
+    int index = 0;
+    for (int j = i + 1; j <= fileSize; j++) {
+        
+        if (fileContent[j] == 0)
+            break;
+            
+        if (fileContent[j] == 10 || fileContent[j] == 32)
+            continue;
+        
+        int result = 0;
+        while (fileContent[j] >= 48 && fileContent[j] <= 57) {
+            result = result * 10 + fileContent[j++] - 48;
+        }
+
+        data[index++] = result;
+        j--;
+    }
+
+    // Set the global values for width and height, free the fileContent since it was allocated and return the data.
+    WIDTH = width;
+    HEIGHT = height;
+    free(fileContent);
+    return data;
+}
+
+/**
+ * This function is used, to calculate the color difference (r, g, b) of two pixels.
+ * @param r_1
+ * @param g_1
+ * @param b_1
+ * @param r_2
+ * @param g_2
+ * @param b_2
+ * @return color difference.
+ */
+int colorDifference(int r_1, int g_1, int b_1, int r_2, int g_2, int b_2) {
+    return (r_1 - r_2) * (r_1 - r_2)  + (g_1 - g_2) * (g_1 - g_2) + (b_1 - b_2) * (b_1 - b_2);
+}
+
+/**
+ * This function is called for the "-s" option. It prints the stats of the image onto the console.
+ * @param data
+ */
+void computeStats(int* data) {
+
+    // Calculate the brightness.
+    int brightness = 0;
+    int magnitude = 0;
+    
+    for (int i = 0; i < WIDTH * HEIGHT * 3; i = i + 3) {
+        magnitude = data[i] + data[i + 1] + data[i + 2];
+        magnitude /= 3;
+        brightness += magnitude;
+    }
+    
+    brightness /= WIDTH * HEIGHT;
+
+    // Print the stats to the console.
+    printf("width: %u\n", WIDTH);
+    printf("height: %u\n", HEIGHT);
+    printf("brightness: %u\n", brightness);
+}
+
+/**
+ * This function is called for the "-p" option.
+ * @param data
+ * @param width
+ * @param height
+ * @return the minPath, as an X-value array, starting from the bottom of the image, going to the top.
+ */
+int* computeMinPath(int* data) {
+
+    // Resulting row - x values.
+    int *rowValues = malloc(HEIGHT * sizeof(int));
+
+    // First compute the local Energy of every pixel.
+    int localEnergy[WIDTH * HEIGHT];
+    int index = 0;
+    int rowLength = WIDTH * 3;
+    // top -> bottom // left -> right
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH * 3; x = x + 3) {
+            // x + y * rowLength , this is the image coordinate. y = row, x = column -> (x, y)
+
+            int cumulativeDistance = 0;
+
+            // First the difference from the left, if existent.
+            if (x >= 3) {
+                cumulativeDistance += colorDifference(data[(x - 3) + y * rowLength], data[(x - 2) + y * rowLength], data[(x - 1) + y * rowLength],
+                        data[x + y * rowLength], data[(x + 1) + y * rowLength], data[(x + 2) + y * rowLength]);
+            }
+
+            // Now the difference from the upper one, if existent.
+            if (y > 0) {
+                cumulativeDistance += colorDifference(data[x + (y - 1) * rowLength], data[(x + 1) + (y - 1) * rowLength], data[(x + 2) + (y - 1) * rowLength],
+                        data[x + y * rowLength], data[(x + 1) + y * rowLength], data[(x + 2) + y * rowLength]);
+            }
+
+            // Save the computed local energy of the coordinate.
+            localEnergy[index++] = cumulativeDistance;
+        }
+    }
+
+    // Compute the fugen - energy now.
+    // top -> bottom // left -> right
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+
+            // If the coordinates exist, get the localEnergy value, otherwise assign INT_MAX.
+            int upperLeft = (x > 0 && y > 0) ? localEnergy[(x - 1) + (y - 1) * WIDTH] : INT_MAX;
+            int upperMid =  (y > 0) ? localEnergy[x + (y - 1) * WIDTH] : INT_MAX;
+            int upperRight = (x < (WIDTH - 1)  && y > 0) ? localEnergy[(x + 1) + (y - 1) * WIDTH] : INT_MAX;
+
+            // Now compute the minimum and add it to the localEnergy value if the minimum is not INT_MAX.
+            int minimum = mini(mini(upperLeft, upperMid), upperRight);
+            localEnergy[x + y * WIDTH] += (minimum == INT_MAX) ? 0 : minimum;
+        }
+    }
+
+    // Go from right to left on the last row, determining the minimum value.
+    int rowXValue = 0;
+    int minimum = INT_MAX;
+    int y = (HEIGHT - 1);
+
+
+    // We use "<=" instead of "<" since we prefer lower x-values.
+    for (int x = (WIDTH - 1); x >= 0; x--) {
+        if (localEnergy[x + y * WIDTH] <= minimum) {
+            minimum = localEnergy[x + y * WIDTH];
+            rowXValue = x;
+        }
+    }
+
+
+    // Now that we have the minimum of the last row, we only need to check the 3 upper ones till we reach the top.
+    int idx = 0;
+    rowValues[idx++] = rowXValue;
+    while (y > 0) {
+        y--;
+        int rowXValue = rowValues[idx - 1];
+        int upperRight = (rowXValue < WIDTH - 1) ? localEnergy[(rowXValue + 1) + y * WIDTH] : INT_MAX;
+        int upperLeft = (rowXValue > 0) ? localEnergy[(rowXValue - 1) + y * WIDTH] : INT_MAX;
+        int upperMid = localEnergy[rowXValue + y * WIDTH];
+
+        rowValues[idx++] = upperMid <= mini(upperRight, upperLeft) ? rowXValue
+                : upperLeft <= mini(upperMid, upperRight) ? rowXValue - 1
+                : rowXValue + 1;
+    }
+
+    return rowValues;
+}
+
+/**
+ * This function is used, to remove the rowValues entries from bottom to top out of the image data.
+ * For every removed pixel, 0 0 0 (black pixel) is added at the right side of the image in the respective row.
+ *
+ * @param rowValues
+ * @param data
+ */
+void removePixels(int* rowValues, int* data) {
+
+    // bottom -> top // left -> right
+    int index = 0;
+    for (int y = HEIGHT - 1; y >= 0; y--) {
+
+        // Determine which column needs to be skipped.
+        int skipColumn = rowValues[index++];
+        
+        int _x = 0;
+        for (int x = 0; x < WIDTH * 3; x = x + 3) {
+            // 3 Values are being skipped.
+            if (skipColumn * 3 == x)
+                continue;
+
+            
+            // Otherwise just copy the values over.
+            data[_x + y * WIDTH * 3] = data[x + y * WIDTH * 3];
+            data[(_x + 1) + y * WIDTH * 3] = data[(x + 1) + y * WIDTH * 3];
+            data[(_x + 2) + y * WIDTH * 3] = data[(x + 2) + y * WIDTH * 3];
+            _x = _x + 3;
+        }
+        // Since each row loses exactly 1 pixel, the 3 last values needs to be set to 0.
+        data[_x + y * WIDTH * 3] = 0;
+        data[(_x + 1) + y * WIDTH * 3] = 0;
+        data[(_x + 2) + y * WIDTH * 3] = 0;
+    }
+}
+
+/**
+ * This function is used, to print the computed values to the file "out.ppm".
+ * @param data
+ */
+void writeDataToOut(int* data) {
+
+    // Destination file of the resulting image should be out.ppm.
+    FILE* f = fopen("out.ppm", "wb");
+    // File could not be opened.
+    if (!f)
+        exit(EXIT_FAILURE);
+
+    // Write    P3
+    //          WIDTH HEIGHT
+    //          255
+    //                      to the file.
+    fprintf(f, "P3\n%u %u\n255\n", WIDTH, HEIGHT);
+
+    // Write the computed values to the file now.
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH * 3; x = x + 3) {
+            fprintf(f, "%u %u %u ", data[x + y * WIDTH * 3], data[(x + 1) + y * WIDTH * 3], data[(x + 2) + y * WIDTH * 3]);
+        }
+        fprintf(f, "\n");
+    }
+
+    // Close the file finally.
+    fclose(f);
+}
+
+
+/**
+ * Simple minimum function.
+ * @param x
+ * @param y
+ * @return minimum of x and y.
+ */
+int mini(int x, int y) {
+    return x <= y ? x : y;
 }
