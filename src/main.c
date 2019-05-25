@@ -103,7 +103,6 @@ int main(int const argc, char** const argv)
         exit(EXIT_FAILURE);
     
     // Shortcut if count == WIDTH
-    /*
     if (count == WIDTH) {
         for (int x = 0; x < WIDTH * 3; x++) {
             for (int y = 0; y < HEIGHT; y++) {
@@ -115,7 +114,6 @@ int main(int const argc, char** const argv)
         free(data);
         exit(EXIT_SUCCESS);
     }
-    */
 
     // Iterate it count - times over, every time computing the minPath and then removing it from the data.
     // Free the rows for each iteration, to avoid heap buffer overflow.
@@ -431,14 +429,11 @@ void removePixels(int* rowValues, int* data) {
             data[(_x + 2) + y * WIDTH * 3] = data[(x + 2) + y * WIDTH * 3];
             _x = _x + 3;
         }
-        // Since each row loses exactly 1 pixel, the 3 last values needs to be set to 0.
+        // Set the remainding pixel values to 0.
         while(_x < WIDTH * 3) {
             data[_x + y * WIDTH * 3] = 0;
             _x++;
         }
-        // data[_x + y * WIDTH * 3] = 0;
-        // data[(_x + 1) + y * WIDTH * 3] = 0;
-        // data[(_x + 2) + y * WIDTH * 3] = 0;
     }
 }
 
