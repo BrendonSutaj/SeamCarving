@@ -458,12 +458,12 @@ void writeDataToOut(int* data) {
     //          WIDTH HEIGHT
     //          255
     //                      to the file.
-    fprintf(f, "P3\n%u %u\n255\n", WIDTH, HEIGHT);
+    fprintf(f, "P3\n%d %d\n255\n", WIDTH, HEIGHT);
 
     // Write the computed values to the file now.
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH * 3; x = x + 3) {
-            fprintf(f, "%u %u %u ", data[x + y * WIDTH * 3], data[(x + 1) + y * WIDTH * 3], data[(x + 2) + y * WIDTH * 3]);
+            fprintf(f, "%d %d %d ", data[x + y * WIDTH * 3], data[(x + 1) + y * WIDTH * 3], data[(x + 2) + y * WIDTH * 3]);
         }
         fprintf(f, "\n");
     }
