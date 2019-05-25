@@ -12,7 +12,7 @@
 int* checkFormat(FILE* file, char* filename);
 int colorDifference(int r_1, int g_1, int b_1, int r_2, int g_2, int b_2);
 void computeStats(int* data);
-int* computeMinPath(int* data);
+int* computeMinPath(int* data, int width);
 void removePixels(int* rowValues, int* data);
 void writeDataToOut(int* data);
 int mini(int x, int y);
@@ -83,7 +83,7 @@ int main(int const argc, char** const argv)
 
     // Next one in the priority list is the p_flag. Compute the minPath and print it to the console. Free data and rows and return.
     if (p_flag) {
-        int* rows = computeMinPath(data);
+        int* rows = computeMinPath(data, WIDTH);
 
         for (int i = 0; i < HEIGHT; i++) {
             printf("%d\n", rows[i]);
@@ -117,11 +117,13 @@ int main(int const argc, char** const argv)
 
     // Iterate it count - times over, every time computing the minPath and then removing it from the data.
     // Free the rows for each iteration, to avoid heap buffer overflow.
+    int width = WIDTH;
     while (count > 0) {
-        int* rows = computeMinPath(data);
+        int* rows = computeMinPath(data, width);
         removePixels(rows, data);
         free(rows);
         count--;
+        width--;
     }
 
     // Finally write the output image, free the data and return.
@@ -316,7 +318,7 @@ void computeStats(int* data) {
  * @param height
  * @return the minPath, as an X-value array, starting from the bottom of the image, going to the top.
  */
-int* computeMinPath(int* data) {
+int* computeMinPath(int* data, int WIDTH) {
 
     // Resulting row - x values.
     int *rowValues = malloc(HEIGHT * sizeof(int));
