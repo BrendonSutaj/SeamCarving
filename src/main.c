@@ -1,24 +1,35 @@
+// Standard Stuff.
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
+
+// For the functions isdigit etc.
 #include <ctype.h>
+
+// Argumentline Options.
 #include <getopt.h>
-#include <unistd.h>
+
+// For char* operations like strrchr.
 #include <string.h>
-#include <math.h>
+
+// For file opening error handling.
+#include <unistd.h>
+
+// For INT_MAX and INT_MIN.
 #include <limits.h>
 
-// Function declarations.
+// Function Declarations.
 int* checkFormat(FILE* file, char* filename);
 int colorDifference(int r_1, int g_1, int b_1, int r_2, int g_2, int b_2);
 void computeStats(int* data);
 int* computeMinPath(int* data, int width);
 void removePixels(int* rowValues, int* data, int width);
 void writeDataToOut(int* data);
-int mini(int x, int y);
+int min(int x, int y);
 
+// Global Variables.
 int WIDTH = 0;
 int HEIGHT = 0;
+
 
 int main(int const argc, char** const argv)
 {
@@ -133,8 +144,6 @@ int main(int const argc, char** const argv)
 }
 
 /**
- * Numbers above 255 should be more than 1 byte, thus the count check should suffice to check for numbers higher than 255.
- * Numbers lower than 0, should have a minus sign '-', which is not allowed and also checked.
  *
  * This function should check for errors in the file given, if there are no errors the values are returned.
  * @param file
@@ -142,6 +151,9 @@ int main(int const argc, char** const argv)
  * @return the data.
  */
 int* checkFormat(FILE* file, char* filename) {
+    int zero = 48;
+    int newline = 10;
+    int space = 32;
 
     // Check for the correct file ending first.
     const char *fileEnding = strrchr(filename, '.');
@@ -166,7 +178,7 @@ int* checkFormat(FILE* file, char* filename) {
     fclose(file);
 
     // In the first row, the ppm format needs to have a "P3\n".
-    if (fileContent[0] != 'P' || fileContent[1] != '3' || fileContent[2] != '\n')
+    if (fileContent[0] != 'P' || fileContent[1] != '3' || fileContent[2] != newline)
         exit(EXIT_FAILURE);
 
 
@@ -180,16 +192,16 @@ int* checkFormat(FILE* file, char* filename) {
     
     int i = 3;
     while (isdigit(fileContent[i])) {
-        width = width * 10 + fileContent[i++] - 48;
+        width = width * 10 + fileContent[i++] - zero;
     }
     
     
     // At least one whitespace after width is needed.
-    if (fileContent[i] != 32)
+    if (fileContent[i] != space)
         exit(EXIT_FAILURE);
 
     // Now skip all additional whitespaces.
-    while (i <= fileSize && fileContent[i] == 32) {
+    while (i <= fileSize && fileContent[i] == space) {
         i++;
     }
 
@@ -198,21 +210,21 @@ int* checkFormat(FILE* file, char* filename) {
         exit(EXIT_FAILURE);
 
     while (isdigit(fileContent[i])) {
-        height = height * 10 + fileContent[i++] - 48;
+        height = height * 10 + fileContent[i++] - zero;
     }
     
     // Skip Whitespaces.
-    while(i <= fileSize && fileContent[i] == 32) {
+    while(i <= fileSize && fileContent[i] == space) {
         i++;
     }
 
     // Width and height needs to be > 0 and a newline has to be following.
-    if (width <= 0 || height <= 0 || fileContent[i] != 10)
+    if (width <= 0 || height <= 0 || fileContent[i] != newline)
         exit(EXIT_FAILURE);
     
     
     // The next two bytes need to be 255 and \n.
-    if (fileContent[++i] != 2 + 48 || fileContent[++i] != 5 + 48 || fileContent[++i] != 5 + 48 || fileContent[++i] != 10)
+    if (fileContent[++i] != 2 + zero || fileContent[++i] != 5 + zero || fileContent[++i] != 5 + zero || fileContent[++i] != newline)
         exit(EXIT_FAILURE);
     
 
@@ -223,7 +235,7 @@ int* checkFormat(FILE* file, char* filename) {
         if (fileContent[j] == 0)
             break;
             
-        if (fileContent[j] == 10 || fileContent[j] == 32)
+        if (fileContent[j] == newline || fileContent[j] == space)
             continue;
 
         if (!isdigit(fileContent[j]))
@@ -231,7 +243,7 @@ int* checkFormat(FILE* file, char* filename) {
         
         int result = 0;
         while (isdigit(fileContent[j])) {
-            result = result * 10 + fileContent[j++] - 48;
+            result = result * 10 + fileContent[j++] - zero;
         }
         
         
@@ -254,12 +266,12 @@ int* checkFormat(FILE* file, char* filename) {
         if (fileContent[j] == 0)
             break;
             
-        if (fileContent[j] == 10 || fileContent[j] == 32)
+        if (fileContent[j] == 10 || fileContent[j] == space)
             continue;
         
         int result = 0;
         while (isdigit(fileContent[j])) {
-            result = result * 10 + fileContent[j++] - 48;
+            result = result * 10 + fileContent[j++] - zero;
         }
 
         data[index++] = result;
@@ -320,12 +332,14 @@ void computeStats(int* data) {
  */
 int* computeMinPath(int* data, int width) {
 
-    // Resulting row - x values.
+    // Resulting row - x values, the MINPATH.
     int *rowValues = malloc(HEIGHT * sizeof(int));
 
     // First compute the local Energy of every pixel.
     int localEnergy[width * HEIGHT];
     int index = 0;
+    
+    // width is decreasing but data has still the width WIDTH * 3.
     int rowLength = WIDTH * 3;
     // top -> bottom // left -> right
     for (int y = 0; y < HEIGHT; y++) {
@@ -362,7 +376,7 @@ int* computeMinPath(int* data, int width) {
             int upperRight = (x < (width - 1)  && y > 0) ? localEnergy[(x + 1) + (y - 1) * width] : INT_MAX;
 
             // Now compute the minimum and add it to the localEnergy value if the minimum is not INT_MAX.
-            int minimum = mini(mini(upperLeft, upperMid), upperRight);
+            int minimum = min(min(upperLeft, upperMid), upperRight);
             localEnergy[x + y * width] += (minimum == INT_MAX) ? 0 : minimum;
         }
     }
@@ -387,20 +401,22 @@ int* computeMinPath(int* data, int width) {
     rowValues[idx++] = rowXValue;
     while (y > 0) {
         y--;
+        // Set it to INT_MAX if the coordinate does not exist.
         int rowXValue = rowValues[idx - 1];
         int upperRight = (rowXValue < width - 1) ? localEnergy[(rowXValue + 1) + y * width] : INT_MAX;
         int upperLeft = (rowXValue > 0) ? localEnergy[(rowXValue - 1) + y * width] : INT_MAX;
         int upperMid = localEnergy[rowXValue + y * width];
         
-        if (upperRight <= mini(upperMid, upperLeft)) {
+        // Priority is upperRight < upperLeft < upperMid.
+        if (upperRight <= min(upperMid, upperLeft)) {
             rowValues[idx] = rowXValue + 1;
         }
         
-        if (upperLeft <= mini(upperMid, upperRight)) {
+        if (upperLeft <= min(upperMid, upperRight)) {
             rowValues[idx] = rowXValue - 1;
         }
         
-        if (upperMid <= mini(upperLeft, upperRight)) {
+        if (upperMid <= min(upperLeft, upperRight)) {
             rowValues[idx] = rowXValue;
         }
 
@@ -491,6 +507,6 @@ void writeDataToOut(int* data) {
  * @param y
  * @return minimum of x and y.
  */
-int mini(int x, int y) {
+int min(int x, int y) {
     return x <= y ? x : y;
 }
