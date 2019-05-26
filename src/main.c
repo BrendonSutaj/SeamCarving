@@ -13,7 +13,7 @@ int* checkFormat(FILE* file, char* filename);
 int colorDifference(int r_1, int g_1, int b_1, int r_2, int g_2, int b_2);
 void computeStats(int* data);
 int* computeMinPath(int* data, int width);
-void removePixels(int* rowValues, int* data);
+void removePixels(int* rowValues, int* data, int width);
 void writeDataToOut(int* data);
 int mini(int x, int y);
 
@@ -67,10 +67,10 @@ int main(int const argc, char** const argv)
     }
 
     // File could not be opened.
-    if (!file)
+    if (file == NULL)
         exit(EXIT_FAILURE);
 
-
+    
     // Check the format for errors and get the values of the pixels into data.
     int* data = checkFormat(file, filename);
 
@@ -120,7 +120,7 @@ int main(int const argc, char** const argv)
     int width = WIDTH;
     while (count > 0) {
         int* rows = computeMinPath(data, width);
-        removePixels(rows, data);
+        removePixels(rows, data, width);
         free(rows);
         count--;
         width--;
@@ -179,7 +179,7 @@ int* checkFormat(FILE* file, char* filename) {
         exit(EXIT_FAILURE);
     
     int i = 3;
-    while (fileContent[i] >= 48 && fileContent[i] <= 57) {
+    while (isdigit(fileContent[i])) {
         width = width * 10 + fileContent[i++] - 48;
     }
     
@@ -194,15 +194,15 @@ int* checkFormat(FILE* file, char* filename) {
     }
 
     // The next byte after the whitespaces needs to be the height. Store the height.
-    if (fileContent[i] < 48 || fileContent[i] > 57)
+    if (!isdigit(fileContent[i]))
         exit(EXIT_FAILURE);
 
-    while (fileContent[i] >= 48 && fileContent[i] <= 57) {
+    while (isdigit(fileContent[i])) {
         height = height * 10 + fileContent[i++] - 48;
     }
     
     // Skip Whitespaces.
-    while(fileContent[i] == 32) {
+    while(i <= fileSize && fileContent[i] == 32) {
         i++;
     }
 
@@ -226,11 +226,11 @@ int* checkFormat(FILE* file, char* filename) {
         if (fileContent[j] == 10 || fileContent[j] == 32)
             continue;
 
-        if (fileContent[j] < 48 || fileContent[j] > 57)
+        if (!isdigit(fileContent[j]))
             exit(EXIT_FAILURE);
         
         int result = 0;
-        while (fileContent[j] >= 48 && fileContent[j] <= 57) {
+        while (isdigit(fileContent[j])) {
             result = result * 10 + fileContent[j++] - 48;
         }
         
@@ -258,7 +258,7 @@ int* checkFormat(FILE* file, char* filename) {
             continue;
         
         int result = 0;
-        while (fileContent[j] >= 48 && fileContent[j] <= 57) {
+        while (isdigit(fileContent[j])) {
             result = result * 10 + fileContent[j++] - 48;
         }
 
@@ -318,18 +318,18 @@ void computeStats(int* data) {
  * @param height
  * @return the minPath, as an X-value array, starting from the bottom of the image, going to the top.
  */
-int* computeMinPath(int* data, int WIDTH) {
+int* computeMinPath(int* data, int width) {
 
     // Resulting row - x values.
     int *rowValues = malloc(HEIGHT * sizeof(int));
 
     // First compute the local Energy of every pixel.
-    int localEnergy[WIDTH * HEIGHT];
+    int localEnergy[width * HEIGHT];
     int index = 0;
     int rowLength = WIDTH * 3;
     // top -> bottom // left -> right
     for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH * 3; x = x + 3) {
+        for (int x = 0; x < width * 3; x = x + 3) {
             // x + y * rowLength , this is the image coordinate. y = row, x = column -> (x, y)
 
             int cumulativeDistance = 0;
@@ -354,16 +354,16 @@ int* computeMinPath(int* data, int WIDTH) {
     // Compute the fugen - energy now.
     // top -> bottom // left -> right
     for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
+        for (int x = 0; x < width; x++) {
 
             // If the coordinates exist, get the localEnergy value, otherwise assign INT_MAX.
-            int upperLeft = (x > 0 && y > 0) ? localEnergy[(x - 1) + (y - 1) * WIDTH] : INT_MAX;
-            int upperMid =  (y > 0) ? localEnergy[x + (y - 1) * WIDTH] : INT_MAX;
-            int upperRight = (x < (WIDTH - 1)  && y > 0) ? localEnergy[(x + 1) + (y - 1) * WIDTH] : INT_MAX;
+            int upperLeft = (x > 0 && y > 0) ? localEnergy[(x - 1) + (y - 1) * width] : INT_MAX;
+            int upperMid =  (y > 0) ? localEnergy[x + (y - 1) * width] : INT_MAX;
+            int upperRight = (x < (width - 1)  && y > 0) ? localEnergy[(x + 1) + (y - 1) * width] : INT_MAX;
 
             // Now compute the minimum and add it to the localEnergy value if the minimum is not INT_MAX.
             int minimum = mini(mini(upperLeft, upperMid), upperRight);
-            localEnergy[x + y * WIDTH] += (minimum == INT_MAX) ? 0 : minimum;
+            localEnergy[x + y * width] += (minimum == INT_MAX) ? 0 : minimum;
         }
     }
 
@@ -374,9 +374,9 @@ int* computeMinPath(int* data, int WIDTH) {
 
 
     // We use "<=" instead of "<" since we prefer lower x-values.
-    for (int x = (WIDTH - 1); x >= 0; x--) {
-        if (localEnergy[x + y * WIDTH] <= minimum) {
-            minimum = localEnergy[x + y * WIDTH];
+    for (int x = (width - 1); x >= 0; x--) {
+        if (localEnergy[x + y * width] <= minimum) {
+            minimum = localEnergy[x + y * width];
             rowXValue = x;
         }
     }
@@ -388,13 +388,23 @@ int* computeMinPath(int* data, int WIDTH) {
     while (y > 0) {
         y--;
         int rowXValue = rowValues[idx - 1];
-        int upperRight = (rowXValue < WIDTH - 1) ? localEnergy[(rowXValue + 1) + y * WIDTH] : INT_MAX;
-        int upperLeft = (rowXValue > 0) ? localEnergy[(rowXValue - 1) + y * WIDTH] : INT_MAX;
-        int upperMid = localEnergy[rowXValue + y * WIDTH];
+        int upperRight = (rowXValue < width - 1) ? localEnergy[(rowXValue + 1) + y * width] : INT_MAX;
+        int upperLeft = (rowXValue > 0) ? localEnergy[(rowXValue - 1) + y * width] : INT_MAX;
+        int upperMid = localEnergy[rowXValue + y * width];
+        
+        if (upperRight <= mini(upperMid, upperLeft)) {
+            rowValues[idx] = rowXValue + 1;
+        }
+        
+        if (upperLeft <= mini(upperMid, upperRight)) {
+            rowValues[idx] = rowXValue - 1;
+        }
+        
+        if (upperMid <= mini(upperLeft, upperRight)) {
+            rowValues[idx] = rowXValue;
+        }
 
-        rowValues[idx++] = upperMid <= mini(upperRight, upperLeft) ? rowXValue
-                : upperLeft <= mini(upperMid, upperRight) ? rowXValue - 1
-                : rowXValue + 1;
+        idx++;
     }
 
     return rowValues;
@@ -407,7 +417,7 @@ int* computeMinPath(int* data, int WIDTH) {
  * @param rowValues
  * @param data
  */
-void removePixels(int* rowValues, int* data) {
+void removePixels(int* rowValues, int* data, int width) {
 
     // bottom -> top // left -> right
     int index = 0;
@@ -417,7 +427,7 @@ void removePixels(int* rowValues, int* data) {
         int skipColumn = rowValues[index++];
         
         int _x = 0;
-        for (int x = 0; x < WIDTH * 3; x = x + 3) {
+        for (int x = 0; x < width * 3; x = x + 3) {
             // 3 Values are being skipped.
             if (skipColumn * 3 == x)
                 continue;
@@ -446,21 +456,28 @@ void writeDataToOut(int* data) {
     // Destination file of the resulting image should be out.ppm.
     FILE* f = fopen("out.ppm", "wb");
     // File could not be opened.
-    if (!f)
+    if (f == NULL)
         exit(EXIT_FAILURE);
 
     // Write    P3
     //          WIDTH HEIGHT
     //          255
     //                      to the file.
-    fprintf(f, "P3\n%d %d\n255\n", WIDTH, HEIGHT);
+    unsigned char twoFiveFive = 255;
+    
+    fprintf(f, "P3\n");
+    fprintf(f, "%u %u\n", WIDTH, HEIGHT);
+    fprintf(f, "%u\n", twoFiveFive);
+    
+    // fprintf(f, "P3\n%d %d\n255\n", WIDTH, HEIGHT);
 
     // Write the computed values to the file now.
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH * 3; x = x + 3) {
-            fprintf(f, "%d %d %d ", data[x + y * WIDTH * 3], data[(x + 1) + y * WIDTH * 3], data[(x + 2) + y * WIDTH * 3]);
+    for (int i = 0; i < WIDTH * HEIGHT * 3; i++) {
+        fprintf(f, "%u ", data[i]);
+        
+        if (i != 0 && i % (WIDTH * 3) == 0) {
+            fprintf(f, "\n");
         }
-        fprintf(f, "\n");
     }
 
     // Close the file finally.
