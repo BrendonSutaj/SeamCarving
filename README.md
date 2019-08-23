@@ -8,7 +8,7 @@ The project is written in C and can be used on files with PPM P3 Format.
 
 * Clone the Repository
 * Run the command "gcc main.c -o seamcarving"
-* Start the Seam Carving process on any PPM P3 format image with the command "./seamcarving <Path to IMG> -n <Iterationcount>"
+* Start the Seam Carving process on any PPM P3 format image with the command "./seamcarving \<Path to IMG\> -n \<Iterationcount\>"
 * The output will be stored in a file named out.ppm
 * Have fun!
 
@@ -16,7 +16,7 @@ The project is written in C and can be used on files with PPM P3 Format.
 ### Prerequisites
 
 * GCC Compiler (https://gcc.gnu.org/)
-* ImageMagick (https://imagemagick.org/index.php) ,in case you want to convert your jpg files to PPM P3 format using the command "convert <Path to JPG> -compress none <Path to PPM>"
+* ImageMagick (https://imagemagick.org/index.php) ,in case you want to convert your jpg files to PPM P3 format using the command "convert \<Path to JPG\> -compress none \<Path to PPM\>"
 
 ## Authors
 
@@ -27,4 +27,3 @@ Original Image             |  Seam Carving (200 Iterations)
 :-------------------------:|:------------------------------:
 ![](Images/aurora.ppm)     |  ![](Images/auroraSC.ppm)
 ![](Images/landscape.ppm)  |  ![](Images/landscapeSC.ppm)
-
