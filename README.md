@@ -25,5 +25,5 @@ The project is written in C and can be used on files with PPM P3 Format.
 ## Seam Carving in Action
 Original Image             |  Seam Carving (200 Iterations)
 :-------------------------:|:------------------------------:
-![](Images/aurora.ppm)     |  ![](Images/auroraSC.ppm)
-![](Images/landscape.ppm)  |  ![](Images/landscapeSC.ppm)
+![](Images/aurora.jpg)     |  ![](Images/auroraSC.jpg)
+![](Images/landscape.jpg)  |  ![](Images/landscapeSC.jpg)
